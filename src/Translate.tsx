@@ -41,7 +41,8 @@ export default function Translate({
       targetLanguage: isValidLanguage(targetLang)
         ? targetLang
         : ("ja" as LanguageCode),
-      sourceText: text ? decodeURIComponent(text) : "",
+      // URLSearchParams already decodes the value; decoding again breaks on "%"
+      sourceText: text ?? "",
     };
   };
 
@@ -61,8 +62,16 @@ export default function Translate({
   const abortControllerRef = useRef<AbortController | null>(null);
   const [translationTime, setTranslationTime] = useState<number>(0);
   const [translationWords, setTranslationWords] = useState<number>(0);
+  // Which input the current targetText belongs to, so swap never uses a stale translation
+  const [translatedKey, setTranslatedKey] = useState<string>("");
+
+  const makeKey = (text: string, sl: LanguageCode, tl: LanguageCode) =>
+    `${sl}|${tl}|${text}`;
+  const translationPending =
+    translatedKey !== makeKey(sourceText, sourceLanguage, targetLanguage);
 
   const handleSwapLanguages = () => {
+    if (translationPending) return;
     setSourceLanguage(targetLanguage);
     setTargetLanguage(sourceLanguage);
     setSourceText(targetText);
@@ -115,6 +124,7 @@ export default function Translate({
       setTargetText("");
       setTranslationTime(0);
       setTranslationWords(0);
+      setTranslatedKey(makeKey(text, sourceLang, targetLang));
       return;
     }
 
@@ -140,6 +150,7 @@ export default function Translate({
         setTargetText(translation);
         setTranslationTime(Math.round(performance.now() - started));
         setTranslationWords(countWords(text));
+        setTranslatedKey(makeKey(text, sourceLang, targetLang));
       }
     } catch (error) {
       if (!currentController.signal.aborted) {
@@ -158,7 +169,7 @@ export default function Translate({
     params.set("sl", sourceLanguage);
     params.set("tl", targetLanguage);
     if (sourceText) {
-      params.set("text", encodeURIComponent(sourceText));
+      params.set("text", sourceText);
     }
 
     window.location.hash = `#${params.toString()}`;
@@ -226,6 +237,7 @@ export default function Translate({
             variant="ghost"
             icon={ArrowLeftRight}
             onClick={handleSwapLanguages}
+            disabled={translationPending}
             aria-label="Swap languages"
           />
         </div>
@@ -235,6 +247,7 @@ export default function Translate({
             variant="ghost"
             icon={ArrowLeftRight}
             onClick={handleSwapLanguages}
+            disabled={translationPending}
             aria-label="Swap languages"
             className="rotate-90"
           />
